@@ -1,4 +1,5 @@
 FROM node:22-slim AS builder
+RUN apt-get -y update && apt-get -y install git
 WORKDIR /usr/src/app
 COPY package.json .
 COPY package-lock.json* .
