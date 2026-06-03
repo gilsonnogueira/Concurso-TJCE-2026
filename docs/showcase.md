@@ -8,6 +8,7 @@ Want to see what Quartz can do? Here are some cool community gardens:
 - [Jacky Zhao's Garden](https://jzhao.xyz/)
 - [Aaron Pham's Garden](https://aarnphm.xyz/)
 - [The Pond](https://turntrout.com/welcome)
+- [Deep Learning: Zero to Hero](https://deeplearningnotes.com)
 - [Eilleen's Everything Notebook](https://quartz.eilleeenz.com/)
 - [Morrowind Modding Wiki](https://morrowind-modding.github.io/)
 - [Stanford CME 302 Numerical Linear Algebra](https://ericdarve.github.io/NLA/)
