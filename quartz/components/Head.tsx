@@ -135,7 +135,9 @@ export default (() => {
         }
         body.is-markmap .markmap-svg:active { cursor: grabbing; }
 
-        /* Garante que as bolinhas ficam clicaveis (o JS move os circulos para o final do DOM) */
+        /* foreignObject pointer-events:none -> pan funciona em TODA a area do mapa */
+        /* Links sao tratados via JS com document.elementsFromPoint */
+        .markmap-node foreignObject { pointer-events: none; }
         .markmap-node circle { cursor: pointer; }
 
         /* Botoes flutuantes de controle do mapa mental */
@@ -319,7 +321,32 @@ export default (() => {
           // Impede scroll da pagina quando o mouse esta sobre o mapa
           svg.addEventListener('wheel', (e) => { e.preventDefault(); }, { passive: false });
           svg.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
-          
+
+          // Detecta clique vs drag para navegacao de links
+          // document.elementsFromPoint encontra elementos HTML mesmo com pointer-events:none
+          let _dragDist = 0, _mx = 0, _my = 0;
+          svg.addEventListener('mousedown', (e) => {
+            _mx = e.clientX; _my = e.clientY; _dragDist = 0;
+          });
+          svg.addEventListener('mousemove', (e) => {
+            _dragDist += Math.abs(e.clientX - _mx) + Math.abs(e.clientY - _my);
+            _mx = e.clientX; _my = e.clientY;
+          });
+          svg.addEventListener('click', (e) => {
+            if (_dragDist > 8) return; // foi drag, nao clique
+            const els = document.elementsFromPoint(e.clientX, e.clientY);
+            for (const el of els) {
+              const a = el.tagName === 'A' ? el : el.closest?.('a');
+              if (a?.href) {
+                e.preventDefault();
+                e.stopPropagation();
+                // Usa o router SPA se disponivel, senao navega diretamente
+                if (window.spaNavigate) window.spaNavigate(new URL(a.href));
+                else window.location.href = a.href;
+                return;
+              }
+            }
+          });
           // Oculta todo conteudo original - o H1 virou o no raiz do mapa
           Array.from(container.children).forEach(child => {
             if (child !== svg) {
@@ -356,16 +383,28 @@ export default (() => {
             return;
           }
 
-          // Reordena circulos para o final de cada no SVG
-          // Isso garante que ficam na frente do foreignObject (que cobre links e bolinhas)
+          // MutationObserver: reordena circulos automaticamente sempre que o Markmap atualiza o DOM
+          // Isso garante que os circulos ficam SEMPRE na frente do foreignObject, inclusive apos:
+          // - Render inicial (com transicoes D3 de ~300ms)
+          // - Clique para expandir/recolher ramos
+          // - Botoes de expandir/recolher tudo
           const reorderCircles = () => {
             svg.querySelectorAll('.markmap-node').forEach(nodeEl => {
               const circle = nodeEl.querySelector('circle');
-              if (circle) nodeEl.appendChild(circle); // move para o final = renderiza por cima
+              if (circle && circle !== nodeEl.lastElementChild) {
+                nodeEl.appendChild(circle);
+              }
             });
           };
-          // Aguarda markmap renderizar e entao reordena
-          setTimeout(reorderCircles, 100);
+
+          let observerTimer = null;
+          const circleObserver = new MutationObserver(() => {
+            // Debounce: espera 350ms de inatividade antes de reordenar
+            // (equivale ao fim das transicoes D3)
+            clearTimeout(observerTimer);
+            observerTimer = setTimeout(reorderCircles, 350);
+          });
+          circleObserver.observe(svg, { childList: true, subtree: true, attributes: true, attributeFilter: ['transform'] });
 
           // Remove controles antigos se houver (navegação SPA)
           document.querySelector('.markmap-controls')?.remove();
@@ -374,15 +413,17 @@ export default (() => {
           const controls = document.createElement('div');
           controls.className = 'markmap-controls';
 
-          const foldAll = (node, fold) => {
-            // Nao dobra o no raiz (depth 0)
-            if (node.depth > 0) {
-              node.payload = { ...node.payload, fold: fold };
-            }
-            node.children?.forEach(c => foldAll(c, fold));
+          // Helper: pega o dado interno do markmap (compativel com versoes diferentes)
+          const getMMData = () => mm.state?.data ?? mm._data ?? rootNode;
+
+          // Helper: forca re-render (compativel com versoes diferentes)
+          const doRender = () => {
+            if (typeof mm.renderData === 'function') mm.renderData();
+            else if (typeof mm.refresh === 'function') mm.refresh();
+            else mm.setData(getMMData());
           };
 
-          // Botao: Expandir tudo  (<> = abre, expande)
+          // Botao: Expandir tudo  (<> = abre)
           const btnExpand = document.createElement('button');
           btnExpand.title = 'Expandir tudo';
           btnExpand.innerHTML = '&lt;&gt;';
@@ -390,28 +431,28 @@ export default (() => {
           btnExpand.style.fontWeight = 'bold';
           btnExpand.onclick = () => {
             const traverse = (node) => {
-              if (node.depth > 0) node.payload = { ...node.payload, fold: 0 };
+              node.payload = { ...node.payload, fold: 0 };
               node.children?.forEach(traverse);
             };
-            traverse(mm.state.data);
-            mm.renderData();
-            setTimeout(() => { reorderCircles(); mm.fit(); }, 100);
+            traverse(getMMData());
+            doRender();
+            setTimeout(() => mm.fit(), 400);
           };
 
-          // Botao: Recolher tudo  (>< = fecha, comprime)
+          // Botao: Recolher tudo  (>< = fecha)
           const btnCollapse = document.createElement('button');
           btnCollapse.title = 'Recolher tudo';
           btnCollapse.innerHTML = '&gt;&lt;';
           btnCollapse.style.fontSize = '13px';
           btnCollapse.style.fontWeight = 'bold';
           btnCollapse.onclick = () => {
-            const traverse = (node) => {
-              if (node.depth > 0) node.payload = { ...node.payload, fold: 1 };
-              node.children?.forEach(traverse);
+            const traverse = (node, isRoot) => {
+              if (!isRoot) node.payload = { ...node.payload, fold: 1 };
+              node.children?.forEach(c => traverse(c, false));
             };
-            traverse(mm.state.data);
-            mm.renderData();
-            setTimeout(() => { reorderCircles(); mm.fit(); }, 100);
+            traverse(getMMData(), true);
+            doRender();
+            setTimeout(() => mm.fit(), 400);
           };
 
           // Botão: Resetar / Ajustar à tela
