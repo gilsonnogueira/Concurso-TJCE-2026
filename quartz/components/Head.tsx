@@ -135,11 +135,8 @@ export default (() => {
         }
         body.is-markmap .markmap-svg:active { cursor: grabbing; }
 
-        /* Garante que os nos (foreignObject) nao bloqueiem as bolinhas de collapse */
-        /* mas mantem links clicaveis dentro dos nos */
-        .markmap-node foreignObject { pointer-events: none; }
-        .markmap-node foreignObject a { pointer-events: all; cursor: pointer; }
-        .markmap-node circle { pointer-events: all; cursor: pointer; }
+        /* Garante que as bolinhas ficam clicaveis (o JS move os circulos para o final do DOM) */
+        .markmap-node circle { cursor: pointer; }
 
         /* Botoes flutuantes de controle do mapa mental */
         .markmap-controls {
@@ -359,6 +356,17 @@ export default (() => {
             return;
           }
 
+          // Reordena circulos para o final de cada no SVG
+          // Isso garante que ficam na frente do foreignObject (que cobre links e bolinhas)
+          const reorderCircles = () => {
+            svg.querySelectorAll('.markmap-node').forEach(nodeEl => {
+              const circle = nodeEl.querySelector('circle');
+              if (circle) nodeEl.appendChild(circle); // move para o final = renderiza por cima
+            });
+          };
+          // Aguarda markmap renderizar e entao reordena
+          setTimeout(reorderCircles, 100);
+
           // Remove controles antigos se houver (navegação SPA)
           document.querySelector('.markmap-controls')?.remove();
 
@@ -381,9 +389,13 @@ export default (() => {
           btnExpand.style.fontSize = '13px';
           btnExpand.style.fontWeight = 'bold';
           btnExpand.onclick = () => {
-            foldAll(rootNode, 0);
-            mm.setData(rootNode);
-            setTimeout(() => mm.fit(), 50);
+            const traverse = (node) => {
+              if (node.depth > 0) node.payload = { ...node.payload, fold: 0 };
+              node.children?.forEach(traverse);
+            };
+            traverse(mm.state.data);
+            mm.renderData();
+            setTimeout(() => { reorderCircles(); mm.fit(); }, 100);
           };
 
           // Botao: Recolher tudo  (>< = fecha, comprime)
@@ -393,9 +405,13 @@ export default (() => {
           btnCollapse.style.fontSize = '13px';
           btnCollapse.style.fontWeight = 'bold';
           btnCollapse.onclick = () => {
-            foldAll(rootNode, 1);
-            mm.setData(rootNode);
-            setTimeout(() => mm.fit(), 50);
+            const traverse = (node) => {
+              if (node.depth > 0) node.payload = { ...node.payload, fold: 1 };
+              node.children?.forEach(traverse);
+            };
+            traverse(mm.state.data);
+            mm.renderData();
+            setTimeout(() => { reorderCircles(); mm.fit(); }, 100);
           };
 
           // Botão: Resetar / Ajustar à tela
