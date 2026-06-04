@@ -1,10 +1,6 @@
 import { QuartzConfig } from "./quartz/cfg"
 import * as Plugin from "./quartz/plugins"
 
-/**
- * Quartz 4 Configuration
- * Customizado para o Concurso TJCE 2026
- */
 const config: QuartzConfig = {
   configuration: {
     pageTitle: "Concurso TJCE 2026",
@@ -49,24 +45,6 @@ const config: QuartzConfig = {
         },
       },
     },
-    additionalHead: [
-      // Injeta Markmap para notas com frontmatter "markmap:"
-      (fileData) => {
-        const hasMarkmap = fileData.frontmatter?.markmap !== undefined
-        if (!hasMarkmap) return null
-        return (
-          <>
-            <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js" defer={false}></script>
-            <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.17/dist/browser/index.js" defer={false}></script>
-            <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.17/dist/browser/index.js" defer={false}></script>
-            <script src="https://cdn.jsdelivr.net/npm/markmap-common@0.17/dist/browser/index.js" defer={false}></script>
-            <script dangerouslySetInnerHTML={{ __html: `
-              window.__MARKMAP_CONFIG__ = ${JSON.stringify(fileData.frontmatter?.markmap ?? {})};
-            `}}></script>
-          </>
-        )
-      }
-    ],
   },
   plugins: {
     transformers: [
