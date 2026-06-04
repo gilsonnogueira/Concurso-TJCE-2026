@@ -1,0 +1,181 @@
+configuration:
+  pageTitle: "Concurso TJCE 2026"
+  baseUrl: "gilsonnogueira.github.io/Concurso-TJCE-2026"
+  locale: "pt-BR"
+  theme:
+    colorScheme: dark
+    typography:
+      header: "Schibsted Grotesk"
+      body: "Source Sans Pro"
+      code: "IBM Plex Mono"
+    colors:
+      darkMode:
+        light: "#161618"
+        lightgray: "#393639"
+        gray: "#646464"
+        darkgray: "#d4d4d4"
+        dark: "#ebebec"
+        secondary: "#7b97aa"
+        tertiary: "#84a59d"
+        highlight: "rgba(143, 159, 169, 0.15)"
+        textHighlight: "#b3aa0288"
+      lightMode:
+        light: "#faf8f8"
+        lightgray: "#e5e5e5"
+        gray: "#b8b8b8"
+        darkgray: "#4e4e4e"
+        dark: "#2b2b2b"
+        secondary: "#284b63"
+        tertiary: "#84a59d"
+        highlight: "rgba(143, 159, 169, 0.15)"
+        textHighlight: "#fff23688"
+  analytics: null
+
+plugins:
+  # --- Transformers ---
+  - source: github:quartz-community/note-properties
+    enabled: true
+
+  - source: github:quartz-community/created-modified-date
+    enabled: true
+    options:
+      priority: ["filesystem", "frontmatter", "git"]
+
+  - source: github:quartz-community/syntax-highlighting
+    enabled: true
+    options:
+      theme:
+        light: "github-light"
+        dark: "github-dark"
+      keepBackground: false
+
+  - source: github:quartz-community/obsidian-flavored-markdown
+    enabled: true
+    options:
+      enableInHtmlEmbed: false
+      enableYouTubeEmbed: true
+      enableVideoEmbed: true
+      enableCheckbox: false
+
+  - source: github:quartz-community/github-flavored-markdown
+    enabled: true
+
+  - source: github:quartz-community/crawl-links
+    enabled: true
+    options:
+      markdownLinkResolution: "shortest"
+      prettyLinks: true
+      openLinksInNewTab: false
+      lazyLoad: true
+      externalLinkIcon: true
+
+  - source: github:quartz-community/latex
+    enabled: true
+    options:
+      renderEngine: "katex"
+
+  - source: github:quartz-community/description
+    enabled: true
+
+  # --- Filters ---
+  - source: github:quartz-community/remove-draft
+    enabled: true
+
+  # --- Emitters ---
+  - source: github:quartz-community/alias-redirects
+    enabled: true
+
+  - source: github:quartz-community/content-index
+    enabled: true
+    options:
+      enableSiteMap: true
+      enableRSS: true
+      includeEmptyFiles: false
+
+  - source: github:quartz-community/og-image
+    enabled: false
+
+  - source: github:quartz-community/folder-page
+    enabled: true
+
+  - source: github:quartz-community/tag-page
+    enabled: true
+
+  - source: github:quartz-community/canvas-page
+    enabled: true
+
+  # --- Layout: Esquerda ---
+  - source: github:quartz-community/page-title
+    enabled: true
+    layout:
+      position: left
+      priority: 1
+
+  - source: github:quartz-community/search
+    enabled: true
+    layout:
+      position: left
+      priority: 2
+
+  - source: github:quartz-community/darkmode
+    enabled: true
+    layout:
+      position: left
+      priority: 3
+
+  - source: github:quartz-community/spacer
+    enabled: true
+    layout:
+      position: left
+      priority: 4
+
+  - source: github:quartz-community/explorer
+    enabled: true
+    options:
+      folderClickBehavior: "collapse"
+      folderDefaultState: "collapsed"
+      useSavedState: true
+    layout:
+      position: left
+      priority: 5
+
+  # --- Layout: Antes do conteudo ---
+  - source: github:quartz-community/breadcrumbs
+    enabled: true
+    options:
+      spacerSymbol: ">"
+      rootName: "Inicio"
+      resolveFrontmatterTitle: true
+      showCurrentPage: true
+    layout:
+      position: beforeBody
+      priority: 5
+
+  - source: github:quartz-community/article-title
+    enabled: true
+    layout:
+      position: beforeBody
+      priority: 10
+
+  - source: github:quartz-community/content-meta
+    enabled: true
+    options:
+      showReadingTime: true
+      showComma: true
+    layout:
+      position: beforeBody
+      priority: 15
+
+  # --- Layout: Direita (vazio por preferencia do usuario) ---
+  - source: github:quartz-community/graph
+    enabled: false
+
+  - source: github:quartz-community/backlinks
+    enabled: false
+
+  - source: github:quartz-community/table-of-contents
+    enabled: false
+
+  # --- Page Types (obrigatorio) ---
+  - source: github:quartz-community/content-page
+    enabled: true
