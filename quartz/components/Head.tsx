@@ -129,8 +129,8 @@ export default (() => {
           
           if (!isMarkmap) return;
         
-          const article = document.querySelector('article');
-          if (!article) return;
+          const container = document.querySelector('.markdown-preview-view') || document.querySelector('article');
+          if (!container) return;
         
           const titleStr = \`${title}\`.replace(/"/g, '&quot;');
         
@@ -143,53 +143,89 @@ export default (() => {
             mmScript.src = "https://cdn.jsdelivr.net/npm/markmap-view@0.17.0/dist/browser/index.js";
             document.head.appendChild(mmScript);
             
-            await new Promise(r => setTimeout(r, 1000));
+            // Wait for markmap to be available
+            for(let i=0; i<50; i++) {
+              if (window.markmap) break;
+              await new Promise(r => setTimeout(r, 100));
+            }
             window.markmapLoaded = true;
           }
-        
-          const parseNode = (el, depth) => {
-            let html = "";
-            if (el.tagName === "LI") {
-              for (let child of el.childNodes) {
-                if (child.tagName === "UL") break;
-                if (child.nodeType === Node.ELEMENT_NODE) html += child.outerHTML;
-                else if (child.nodeType === Node.TEXT_NODE) html += child.textContent;
-              }
-            } else {
-              html = el.innerHTML || el.textContent || "";
-            }
-            
-            const children = [];
-            const ul = Array.from(el.children).find(c => c.tagName === "UL") || 
-                       (el.nextElementSibling && el.nextElementSibling.tagName === "UL" ? el.nextElementSibling : null);
-                       
-            if (ul) {
-              const lis = Array.from(ul.children).filter(c => c.tagName === "LI");
-              lis.forEach(li => children.push(parseNode(li, depth + 1)));
-            }
-        
-            return {
-              type: 'heading',
-              depth: depth,
-              payload: { lines: [0, 1] },
-              content: html.trim(),
-              children: children
-            };
-          };
-        
-          const firstUl = article.querySelector('ul');
-          if (!firstUl) return;
           
-          const rootNode = {
-            type: 'heading',
-            depth: 0,
-            payload: { lines: [0, 1] },
-            content: titleStr,
-            children: []
+          if (!window.markmap) return;
+          
+          const parseDOMToINode = (containerEl, rootTitle) => {
+            const rootNode = { type: 'heading', depth: 0, payload: { lines: [0, 1] }, content: rootTitle, children: [] };
+            const stack = [ { depth: 0, node: rootNode } ];
+        
+            const children = Array.from(containerEl.children);
+        
+            const parseUl = (ul, depth) => {
+              const nodes = [];
+              Array.from(ul.children).forEach(li => {
+                if (li.tagName === "LI") {
+                  let html = "";
+                  for (let child of li.childNodes) {
+                    if (child.tagName === "UL" || child.tagName === "OL") break;
+                    if (child.nodeType === Node.ELEMENT_NODE) html += child.outerHTML;
+                    else if (child.nodeType === Node.TEXT_NODE) html += child.textContent;
+                  }
+                  
+                  // Clean up anchor links or fold comments if present
+                  const temp = document.createElement('div');
+                  temp.innerHTML = html.trim();
+                  temp.querySelectorAll('a.internal-link[role="anchor"]').forEach(a => a.remove());
+                  html = temp.innerHTML.trim();
+                  
+                  const node = { type: 'heading', depth: depth, payload: { lines: [0, 1] }, content: html, children: [] };
+                  const childUl = Array.from(li.children).find(c => c.tagName === "UL" || c.tagName === "OL");
+                  if (childUl) {
+                    node.children = parseUl(childUl, depth + 1);
+                  }
+                  nodes.push(node);
+                }
+              });
+              return nodes;
+            };
+        
+            children.forEach(el => {
+              const tag = el.tagName;
+              let depth = -1;
+              let content = "";
+              let isList = false;
+        
+              if (tag === 'H2') { depth = 1; content = el.innerHTML; }
+              else if (tag === 'H3') { depth = 2; content = el.innerHTML; }
+              else if (tag === 'H4') { depth = 3; content = el.innerHTML; }
+              else if (tag === 'H5') { depth = 4; content = el.innerHTML; }
+              else if (tag === 'H6') { depth = 5; content = el.innerHTML; }
+              else if (tag === 'UL' || tag === 'OL') { isList = true; }
+        
+              if (depth !== -1) {
+                const temp = document.createElement('div');
+                temp.innerHTML = content;
+                temp.querySelectorAll('a.internal-link[role="anchor"]').forEach(a => a.remove());
+                content = temp.innerHTML.trim();
+        
+                const node = { type: 'heading', depth: depth, payload: { lines: [0, 1] }, content: content, children: [] };
+                
+                while (stack.length > 1 && stack[stack.length - 1].depth >= depth) {
+                  stack.pop();
+                }
+                stack[stack.length - 1].node.children.push(node);
+                stack.push({ depth: depth, node: node });
+              } else if (isList) {
+                const currentTop = stack[stack.length - 1];
+                const nodes = parseUl(el, currentTop.depth + 1);
+                currentTop.node.children.push(...nodes);
+              }
+            });
+        
+            return rootNode;
           };
         
-          const topLis = Array.from(firstUl.children).filter(c => c.tagName === "LI");
-          topLis.forEach(li => rootNode.children.push(parseNode(li, 1)));
+          const rootNode = parseDOMToINode(container, titleStr);
+          
+          if (rootNode.children.length === 0) return; // Se nao achou nada, sai sem renderizar
         
           const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
           svg.style.width = "100%";
@@ -197,10 +233,10 @@ export default (() => {
           svg.style.minHeight = "600px";
           svg.className = "markmap-svg";
           
-          firstUl.parentNode.insertBefore(svg, firstUl);
+          container.insertBefore(svg, container.firstChild);
           
-          // Ocultar conteudo original markdown
-          Array.from(article.children).forEach(child => {
+          // Ocultar conteudo original markdown, exceto SVG, H1, div de metadata
+          Array.from(container.children).forEach(child => {
             if (child !== svg && child.tagName !== 'H1' && !child.classList.contains('content-meta')) {
               child.style.display = 'none';
             }
