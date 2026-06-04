@@ -135,10 +135,20 @@ export default (() => {
         }
         body.is-markmap .markmap-svg:active { cursor: grabbing; }
 
-        /* foreignObject pointer-events:none -> pan funciona em TODA a area do mapa */
-        /* Links sao tratados via JS com document.elementsFromPoint */
-        .markmap-node foreignObject { pointer-events: none; }
-        .markmap-node circle { cursor: pointer; }
+        /* Modo Pan (padrao): foreignObject nao captura eventos */
+        body.is-markmap-pan .markmap-node foreignObject { pointer-events: none; }
+        /* Modo Selecionar: foreignObject captura eventos (links, texto) */
+        body.is-markmap-select .markmap-node foreignObject { pointer-events: all; }
+        /* Cursores por modo */
+        body.is-markmap-pan .markmap-svg { cursor: grab !important; }
+        body.is-markmap-pan .markmap-svg:active { cursor: grabbing !important; }
+        body.is-markmap-select .markmap-svg { cursor: default !important; }
+        body.is-markmap-select .markmap-node circle { cursor: pointer; }
+        /* Botao de modo ativo */
+        .markmap-controls button.mode-active {
+          background: rgba(59,130,246,0.85) !important;
+          border-color: rgba(96,165,250,0.8) !important;
+        }
 
         /* Botoes flutuantes de controle do mapa mental */
         .markmap-controls {
@@ -321,32 +331,6 @@ export default (() => {
           // Impede scroll da pagina quando o mouse esta sobre o mapa
           svg.addEventListener('wheel', (e) => { e.preventDefault(); }, { passive: false });
           svg.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
-
-          // Detecta clique vs drag para navegacao de links
-          // document.elementsFromPoint encontra elementos HTML mesmo com pointer-events:none
-          let _dragDist = 0, _mx = 0, _my = 0;
-          svg.addEventListener('mousedown', (e) => {
-            _mx = e.clientX; _my = e.clientY; _dragDist = 0;
-          });
-          svg.addEventListener('mousemove', (e) => {
-            _dragDist += Math.abs(e.clientX - _mx) + Math.abs(e.clientY - _my);
-            _mx = e.clientX; _my = e.clientY;
-          });
-          svg.addEventListener('click', (e) => {
-            if (_dragDist > 8) return; // foi drag, nao clique
-            const els = document.elementsFromPoint(e.clientX, e.clientY);
-            for (const el of els) {
-              const a = el.tagName === 'A' ? el : el.closest?.('a');
-              if (a?.href) {
-                e.preventDefault();
-                e.stopPropagation();
-                // Usa o router SPA se disponivel, senao navega diretamente
-                if (window.spaNavigate) window.spaNavigate(new URL(a.href));
-                else window.location.href = a.href;
-                return;
-              }
-            }
-          });
           // Oculta todo conteudo original - o H1 virou o no raiz do mapa
           Array.from(container.children).forEach(child => {
             if (child !== svg) {
@@ -406,10 +390,26 @@ export default (() => {
           });
           circleObserver.observe(svg, { childList: true, subtree: true, attributes: true, attributeFilter: ['transform'] });
 
-          // Remove controles antigos se houver (navegação SPA)
+          // ================================================================
+          // MODO PAN / SELECIONAR (estilo Whimsical)
+          // ================================================================
+          let _isPanMode = true;
+
+          const setMode = (pan) => {
+            _isPanMode = pan;
+            document.body.classList.toggle('is-markmap-pan', pan);
+            document.body.classList.toggle('is-markmap-select', !pan);
+            btnMode.classList.toggle('mode-active', pan);
+            btnSelect.classList.toggle('mode-active', !pan);
+          };
+
+          // Inicia em modo Pan
+          setMode(true);
+
+          // Remove controles antigos se houver (navegacao SPA)
           document.querySelector('.markmap-controls')?.remove();
 
-          // Cria botões de controle flutuantes
+          // Cria botoes de controle flutuantes
           const controls = document.createElement('div');
           controls.className = 'markmap-controls';
 
@@ -423,7 +423,32 @@ export default (() => {
             else mm.setData(getMMData());
           };
 
-          // Botao: Expandir tudo  (<> = abre)
+          // --- BOTAO: Modo Pan (mao) ---
+          const btnMode = document.createElement('button');
+          btnMode.title = 'Modo Pan - mover mapa (atalho: P)';
+          btnMode.innerHTML = '&#x270B;'; // ✋
+          btnMode.style.fontSize = '20px';
+          btnMode.onclick = () => setMode(true);
+
+          // --- BOTAO: Modo Selecionar (seta) ---
+          const btnSelect = document.createElement('button');
+          btnSelect.title = 'Modo Selecionar - clicar links e ramos (atalho: S)';
+          btnSelect.innerHTML = '&#x2197;'; // ↗ seta
+          btnSelect.style.fontSize = '18px';
+          btnSelect.onclick = () => setMode(false);
+
+          // Atalho de teclado P (pan) e S (select)
+          const keyHandler = (e) => {
+            if (e.key === 'p' || e.key === 'P') setMode(true);
+            if (e.key === 's' || e.key === 'S') setMode(false);
+          };
+          document.addEventListener('keydown', keyHandler);
+
+          // Separador visual
+          const sep = document.createElement('div');
+          sep.style.cssText = 'height:1px;background:rgba(255,255,255,0.2);margin:2px 4px;';
+
+          // --- BOTAO: Expandir tudo (<>) ---
           const btnExpand = document.createElement('button');
           btnExpand.title = 'Expandir tudo';
           btnExpand.innerHTML = '&lt;&gt;';
@@ -439,7 +464,7 @@ export default (() => {
             setTimeout(() => mm.fit(), 400);
           };
 
-          // Botao: Recolher tudo  (>< = fecha)
+          // --- BOTAO: Recolher tudo (><) ---
           const btnCollapse = document.createElement('button');
           btnCollapse.title = 'Recolher tudo';
           btnCollapse.innerHTML = '&gt;&lt;';
@@ -455,32 +480,35 @@ export default (() => {
             setTimeout(() => mm.fit(), 400);
           };
 
-          // Botão: Resetar / Ajustar à tela
+          // --- BOTAO: Ajustar a tela ---
           const btnFit = document.createElement('button');
-          btnFit.title = 'Ajustar à tela';
-          btnFit.innerHTML = '⊡';
+          btnFit.title = 'Ajustar a tela';
+          btnFit.innerHTML = '&#x22A1;'; // ⊡
           btnFit.onclick = () => mm.fit();
 
-          // Botão: Zoom +
+          // --- BOTAO: Zoom + ---
           const btnZoomIn = document.createElement('button');
           btnZoomIn.title = 'Zoom +';
           btnZoomIn.innerHTML = '+';
           btnZoomIn.style.fontWeight = 'bold';
           btnZoomIn.onclick = () => mm.rescale(1.3);
 
-          // Botão: Zoom -
+          // --- BOTAO: Zoom - ---
           const btnZoomOut = document.createElement('button');
           btnZoomOut.title = 'Zoom -';
-          btnZoomOut.innerHTML = '−';
+          btnZoomOut.innerHTML = '&#x2212;'; // −
           btnZoomOut.style.fontWeight = 'bold';
           btnZoomOut.onclick = () => mm.rescale(0.77);
 
-          controls.append(btnExpand, btnCollapse, btnFit, btnZoomIn, btnZoomOut);
+          controls.append(btnMode, btnSelect, sep, btnExpand, btnCollapse, btnFit, btnZoomIn, btnZoomOut);
           document.body.appendChild(controls);
 
-          // Remove controles ao sair da pagina de mapa mental
+          // Remove controles e limpa modo ao sair da pagina de mapa mental
           document.addEventListener('nav', () => {
             controls.remove();
+            document.removeEventListener('keydown', keyHandler);
+            document.body.classList.remove('is-markmap-pan', 'is-markmap-select');
+            circleObserver.disconnect();
           }, { once: true });
         });
         ` }} />
