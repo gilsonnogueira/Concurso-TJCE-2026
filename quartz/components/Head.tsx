@@ -117,9 +117,14 @@ export default (() => {
         body.theme-dark .markmap foreignObject a, body.theme-dark .markmap foreignObject a *, .theme-dark .markmap foreignObject a, .theme-dark .markmap foreignObject a * { color: #79c0ff !important; }
         body.theme-dark .markmap-node circle[fill="#fff" i], body.theme-dark .markmap-node circle[fill="#ffffff" i], body.theme-dark .markmap-node circle[fill="white" i], body.theme-dark .markmap-node circle[fill="rgb(255, 255, 255)" i], body.theme-dark .markmap-node circle[fill="rgb(255,255,255)" i], body.theme-dark .markmap-node circle[style*="fff" i], body.theme-dark .markmap-node circle[style*="white" i], body.theme-dark .markmap-node circle[style*="255, 255, 255" i], body.theme-dark .markmap-node circle[style*="255,255,255" i], .theme-dark .markmap-node circle[fill="#fff" i], .theme-dark .markmap-node circle[style*="fff" i] { fill: transparent !important; }
         
-        /* Layout adjustments */
+        /* Layout adjustments - sempre oculta sidebar direita */
         .right.sidebar { display: none !important; }
         .center.center { max-width: 90vw !important; width: 100% !important; margin: 0 auto; }
+
+        /* Quando for mapa mental, oculta sidebar esquerda e expande */
+        body.is-markmap .left.sidebar { display: none !important; }
+        body.is-markmap .center.center { max-width: 100vw !important; width: 100vw !important; margin: 0 !important; padding: 0 0 0 1rem !important; }
+        body.is-markmap .markmap-svg { height: calc(100vh - 120px) !important; min-height: 500px; }
         ` }} />
 
         <script dangerouslySetInnerHTML={{ __html: `
@@ -127,12 +132,28 @@ export default (() => {
           const isMarkmap = window.location.href.toLowerCase().includes('mapa-mental') || 
                             document.title.toLowerCase().includes('mapa mental');
           
-          if (!isMarkmap) return;
+          // Aplica/remove classe no body para controlar layout via CSS
+          if (isMarkmap) {
+            document.body.classList.add('is-markmap');
+          } else {
+            document.body.classList.remove('is-markmap');
+            return;
+          }
         
           const container = document.querySelector('.markdown-preview-view') || document.querySelector('article');
           if (!container) return;
         
-          const titleStr = \`${title}\`.replace(/"/g, '&quot;');
+          // Usa o H1 do conteudo como no central (igual ao Obsidian)
+          const h1El = container.querySelector('h1');
+          let titleStr;
+          if (h1El) {
+            const temp = document.createElement('div');
+            temp.innerHTML = h1El.innerHTML;
+            temp.querySelectorAll('a.internal-link[role="anchor"]').forEach(a => a.remove());
+            titleStr = temp.innerHTML.trim();
+          } else {
+            titleStr = \`${title}\`.replace(/"/g, '&quot;');
+          }
         
           const loadScript = (src) => new Promise((resolve, reject) => {
             if (document.querySelector(\`script[src="\${src}"]\`)) { resolve(); return; }
@@ -199,7 +220,9 @@ export default (() => {
               let content = "";
               let isList = false;
         
-              if (tag === 'H2') { depth = 1; content = el.innerHTML; }
+              // H1 vira o no raiz (ja tratado acima), ignoramos aqui
+              if (tag === 'H1') { return; }
+              else if (tag === 'H2') { depth = 1; content = el.innerHTML; }
               else if (tag === 'H3') { depth = 2; content = el.innerHTML; }
               else if (tag === 'H4') { depth = 3; content = el.innerHTML; }
               else if (tag === 'H5') { depth = 4; content = el.innerHTML; }
@@ -245,8 +268,9 @@ export default (() => {
           
           container.insertBefore(svg, container.firstChild);
           
+          // Oculta todo conteudo original - o H1 virou o no raiz do mapa
           Array.from(container.children).forEach(child => {
-            if (child !== svg && child.tagName !== 'H1' && !child.classList.contains('content-meta')) {
+            if (child !== svg) {
               child.style.display = 'none';
             }
           });
