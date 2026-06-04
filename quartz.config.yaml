@@ -2,6 +2,10 @@ configuration:
   pageTitle: "Concurso TJCE 2026"
   baseUrl: "gilsonnogueira.github.io/Concurso-TJCE-2026"
   locale: "pt-BR"
+  ignorePatterns:
+    - "private"
+    - "templates"
+    - ".obsidian"
   theme:
     colorScheme: dark
     typography:
