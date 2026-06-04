@@ -106,6 +106,116 @@ export default (() => {
             return resource
           }
         })}
+
+        <style dangerouslySetInnerHTML={{ __html: `
+        /* Markmap - Ajustes de Contraste para Modo Noturno */
+        body.theme-dark .markmap text, body.theme-dark .markmap-svg text, .theme-dark .markmap text { fill: #e2e8f0 !important; color: #e2e8f0 !important; }
+        body.theme-dark .markmap foreignObject *, .theme-dark .markmap foreignObject * { color: #e2e8f0 !important; }
+        body.theme-dark .markmap foreignObject strong, body.theme-dark .markmap foreignObject strong *, body.theme-dark .markmap foreignObject b, body.theme-dark .markmap foreignObject b *, .theme-dark .markmap foreignObject strong, .theme-dark .markmap foreignObject strong *, .theme-dark .markmap foreignObject b, .theme-dark .markmap foreignObject b * { color: #58a6ff !important; font-weight: bold; }
+        body.theme-dark .markmap foreignObject em, body.theme-dark .markmap foreignObject i, .theme-dark .markmap foreignObject em, .theme-dark .markmap foreignObject i { font-style: italic; }
+        body.theme-dark .markmap foreignObject mark, body.theme-dark .markmap foreignObject mark *, .theme-dark .markmap foreignObject mark, .theme-dark .markmap foreignObject mark * { background-color: #ffd859 !important; color: #111111 !important; -webkit-text-fill-color: #111111 !important; padding: 0 !important; margin: 0 !important; }
+        body.theme-dark .markmap foreignObject a, body.theme-dark .markmap foreignObject a *, .theme-dark .markmap foreignObject a, .theme-dark .markmap foreignObject a * { color: #79c0ff !important; }
+        body.theme-dark .markmap-node circle[fill="#fff" i], body.theme-dark .markmap-node circle[fill="#ffffff" i], body.theme-dark .markmap-node circle[fill="white" i], body.theme-dark .markmap-node circle[fill="rgb(255, 255, 255)" i], body.theme-dark .markmap-node circle[fill="rgb(255,255,255)" i], body.theme-dark .markmap-node circle[style*="fff" i], body.theme-dark .markmap-node circle[style*="white" i], body.theme-dark .markmap-node circle[style*="255, 255, 255" i], body.theme-dark .markmap-node circle[style*="255,255,255" i], .theme-dark .markmap-node circle[fill="#fff" i], .theme-dark .markmap-node circle[style*="fff" i] { fill: transparent !important; }
+        
+        /* Layout adjustments */
+        .right.sidebar { display: none !important; }
+        .center.center { max-width: 90vw !important; width: 100% !important; margin: 0 auto; }
+        ` }} />
+
+        <script dangerouslySetInnerHTML={{ __html: `
+        document.addEventListener("nav", async (e) => {
+          const isMarkmap = window.location.href.toLowerCase().includes('mapa-mental') || 
+                            document.title.toLowerCase().includes('mapa mental');
+          
+          if (!isMarkmap) return;
+        
+          const article = document.querySelector('article');
+          if (!article) return;
+        
+          const titleStr = \`${title}\`.replace(/"/g, '&quot;');
+        
+          if (!window.markmapLoaded) {
+            const d3Script = document.createElement('script');
+            d3Script.src = "https://cdn.jsdelivr.net/npm/d3@7";
+            document.head.appendChild(d3Script);
+            
+            const mmScript = document.createElement('script');
+            mmScript.src = "https://cdn.jsdelivr.net/npm/markmap-view@0.17.0/dist/browser/index.js";
+            document.head.appendChild(mmScript);
+            
+            await new Promise(r => setTimeout(r, 1000));
+            window.markmapLoaded = true;
+          }
+        
+          const parseNode = (el, depth) => {
+            let html = "";
+            if (el.tagName === "LI") {
+              for (let child of el.childNodes) {
+                if (child.tagName === "UL") break;
+                if (child.nodeType === Node.ELEMENT_NODE) html += child.outerHTML;
+                else if (child.nodeType === Node.TEXT_NODE) html += child.textContent;
+              }
+            } else {
+              html = el.innerHTML || el.textContent || "";
+            }
+            
+            const children = [];
+            const ul = Array.from(el.children).find(c => c.tagName === "UL") || 
+                       (el.nextElementSibling && el.nextElementSibling.tagName === "UL" ? el.nextElementSibling : null);
+                       
+            if (ul) {
+              const lis = Array.from(ul.children).filter(c => c.tagName === "LI");
+              lis.forEach(li => children.push(parseNode(li, depth + 1)));
+            }
+        
+            return {
+              type: 'heading',
+              depth: depth,
+              payload: { lines: [0, 1] },
+              content: html.trim(),
+              children: children
+            };
+          };
+        
+          const firstUl = article.querySelector('ul');
+          if (!firstUl) return;
+          
+          const rootNode = {
+            type: 'heading',
+            depth: 0,
+            payload: { lines: [0, 1] },
+            content: titleStr,
+            children: []
+          };
+        
+          const topLis = Array.from(firstUl.children).filter(c => c.tagName === "LI");
+          topLis.forEach(li => rootNode.children.push(parseNode(li, 1)));
+        
+          const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          svg.style.width = "100%";
+          svg.style.height = "80vh";
+          svg.style.minHeight = "600px";
+          svg.className = "markmap-svg";
+          
+          firstUl.parentNode.insertBefore(svg, firstUl);
+          
+          // Ocultar conteudo original markdown
+          Array.from(article.children).forEach(child => {
+            if (child !== svg && child.tagName !== 'H1' && !child.classList.contains('content-meta')) {
+              child.style.display = 'none';
+            }
+          });
+        
+          const { Markmap } = window.markmap;
+          Markmap.create(svg, {
+            color: (node) => {
+                const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
+                return colors[node.depth % colors.length];
+            },
+            autoFit: true
+          }, rootNode);
+        });
+        ` }} />
       </head>
     )
   }
