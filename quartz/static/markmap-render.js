@@ -2,54 +2,115 @@
 (function () {
   'use strict';
 
-  function isMarkmapPage() {
-    // Detecta paginas de mapa mental pelo titulo h1 ou pela URL
-    var h1 = document.querySelector('h1');
-    var title = (h1 ? h1.textContent : '') + ' ' + window.location.href;
-    var lower = title.toLowerCase();
-    return lower.indexOf('mapa mental') !== -1 || lower.indexOf('mapa-mental') !== -1;
+  // Libs carregadas uma unica vez
+  var libsLoaded = false;
+  var libsLoading = false;
+  var pendingCallback = null;
+
+  var LIBS = [
+    'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js',
+    'https://cdn.jsdelivr.net/npm/markmap-common@0.17/dist/browser/index.js',
+    'https://cdn.jsdelivr.net/npm/markmap-view@0.17/dist/browser/index.js',
+    'https://cdn.jsdelivr.net/npm/markmap-lib@0.17/dist/browser/index.js'
+  ];
+
+  function loadLibs(cb) {
+    if (libsLoaded) { cb(); return; }
+    if (libsLoading) { pendingCallback = cb; return; }
+    libsLoading = true;
+    var i = 0;
+    function next() {
+      if (i >= LIBS.length) {
+        libsLoaded = true;
+        libsLoading = false;
+        cb();
+        if (pendingCallback) { var f = pendingCallback; pendingCallback = null; f(); }
+        return;
+      }
+      // Verifica se a lib ja foi carregada
+      if (document.querySelector('script[src="' + LIBS[i] + '"]')) { i++; next(); return; }
+      var s = document.createElement('script');
+      s.src = LIBS[i];
+      s.onload = function() { i++; next(); };
+      s.onerror = function() { console.error('Failed: ' + LIBS[i]); i++; next(); };
+      document.head.appendChild(s);
+    }
+    next();
   }
 
-  function renderMarkmap() {
-    if (!isMarkmapPage()) return;
+  function isMarkmapPage() {
+    var h1 = document.querySelector('article h1, .center h1, h1.page-title');
+    if (!h1) h1 = document.querySelector('h1');
+    var text = (h1 ? h1.textContent : '').toLowerCase();
+    var url = window.location.pathname.toLowerCase();
+    return text.indexOf('mapa mental') !== -1 || url.indexOf('mapa-mental') !== -1 || url.indexOf('mapa_mental') !== -1;
+  }
 
-    // Evita renderizar duas vezes
-    if (document.getElementById('markmap-wrapper')) return;
+  function onNav() {
+    // Quartz ja re-renderizou o DOM neste ponto
+    // Nao precisa remover wrapper antigo pois o DOM foi substituido
+    if (!isMarkmapPage()) return;
 
     var article = document.querySelector('article');
     if (!article) return;
 
-    // Captura o texto antes de esconder
+    // Captura texto ANTES de modificar o DOM
     var rawText = article.innerText || article.textContent || '';
+    if (!rawText.trim()) return;
 
-    // Cria container
+    // Cria interface
     var wrapper = document.createElement('div');
     wrapper.id = 'markmap-wrapper';
-    wrapper.style.cssText = 'width:100%;height:88vh;display:flex;flex-direction:column;margin-bottom:2rem;';
+    wrapper.style.cssText = [
+      'width:100%',
+      'height:85vh',
+      'display:flex',
+      'flex-direction:column',
+      'gap:8px',
+      'margin-bottom:2rem'
+    ].join(';');
 
     var toolbar = document.createElement('div');
-    toolbar.style.cssText = 'padding:8px 0;display:flex;gap:8px;';
+    toolbar.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;';
 
-    var btnFit = document.createElement('button');
-    btnFit.textContent = 'Centralizar';
-    btnFit.style.cssText = 'padding:5px 14px;border-radius:6px;border:1px solid var(--gray, #888);background:var(--lightgray, #333);color:var(--dark, #eee);cursor:pointer;font-size:0.85em;';
+    function btn(label) {
+      var b = document.createElement('button');
+      b.textContent = label;
+      b.style.cssText = [
+        'padding:5px 14px',
+        'border-radius:6px',
+        'border:1px solid var(--gray,#888)',
+        'background:var(--lightgray,#333)',
+        'color:var(--dark,#eee)',
+        'cursor:pointer',
+        'font-size:0.85em',
+        'font-family:inherit'
+      ].join(';');
+      toolbar.appendChild(b);
+      return b;
+    }
 
-    var btnToggle = document.createElement('button');
-    btnToggle.textContent = 'Ver Texto';
-    btnToggle.style.cssText = 'padding:5px 14px;border-radius:6px;border:1px solid var(--gray, #888);background:var(--lightgray, #333);color:var(--dark, #eee);cursor:pointer;font-size:0.85em;';
-
-    toolbar.appendChild(btnFit);
-    toolbar.appendChild(btnToggle);
+    var btnFit = btn('Centralizar');
+    var btnToggle = btn('Ver Texto');
     wrapper.appendChild(toolbar);
 
     var svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svgEl.style.cssText = 'flex:1;border-radius:8px;background:var(--light, #1a1a2e);border:1px solid var(--lightgray, #393639);';
+    svgEl.style.cssText = [
+      'flex:1',
+      'border-radius:8px',
+      'background:var(--light,#1a1a2e)',
+      'border:1px solid var(--lightgray,#393639)',
+      'min-height:300px'
+    ].join(';');
     wrapper.appendChild(svgEl);
 
+    // Esconde artigo e insere mapa antes dele
     article.style.display = 'none';
     article.parentNode.insertBefore(wrapper, article);
 
     var showingMap = true;
+    var mmInstance = null;
+
     btnToggle.onclick = function () {
       if (showingMap) {
         wrapper.style.display = 'none';
@@ -59,34 +120,23 @@
         wrapper.style.display = 'flex';
         article.style.display = 'none';
         btnToggle.textContent = 'Ver Texto';
+        if (mmInstance) setTimeout(function() { mmInstance.fit(); }, 50);
       }
       showingMap = !showingMap;
     };
 
-    // Carrega libs sequencialmente
-    var libs = [
-      'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js',
-      'https://cdn.jsdelivr.net/npm/markmap-common@0.17/dist/browser/index.js',
-      'https://cdn.jsdelivr.net/npm/markmap-view@0.17/dist/browser/index.js',
-      'https://cdn.jsdelivr.net/npm/markmap-lib@0.17/dist/browser/index.js'
-    ];
-
-    function loadNext(i) {
-      if (i >= libs.length) { doRender(); return; }
-      var s = document.createElement('script');
-      s.src = libs[i];
-      s.onload = function () { loadNext(i + 1); };
-      s.onerror = function () { console.error('Failed: ' + libs[i]); loadNext(i + 1); };
-      document.head.appendChild(s);
-    }
-
-    function doRender() {
+    loadLibs(function() {
+      var lib = window.markmap;
+      if (!lib || !lib.Transformer || !lib.Markmap) {
+        console.error('Markmap libs not available on window.markmap');
+        wrapper.remove();
+        article.style.display = '';
+        return;
+      }
       try {
-        var lib = window.markmap;
-        if (!lib || !lib.Transformer) throw new Error('markmap not loaded');
-        var t = new lib.Transformer();
-        var result = t.transform(rawText);
-        var mm = lib.Markmap.create(svgEl, {
+        var transformer = new lib.Transformer();
+        var result = transformer.transform(rawText);
+        mmInstance = lib.Markmap.create(svgEl, {
           initialExpandLevel: 2,
           maxWidth: 350,
           spacingHorizontal: 80,
@@ -94,32 +144,17 @@
           duration: 300,
           colorFreezeLevel: 2,
         }, result.root);
-        btnFit.onclick = function () { mm.fit(); };
-        setTimeout(function () { mm.fit(); }, 150);
-      } catch (e) {
-        console.error('Markmap error:', e);
+        btnFit.onclick = function () { mmInstance.fit(); };
+        setTimeout(function () { mmInstance.fit(); }, 200);
+      } catch (err) {
+        console.error('Markmap render error:', err);
         wrapper.remove();
         article.style.display = '';
       }
-    }
-
-    loadNext(0);
+    });
   }
 
-  // Executa na carga inicial
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', renderMarkmap);
-  } else {
-    renderMarkmap();
-  }
-
-  // Suporte ao SPA do Quartz
-  document.addEventListener('nav', function () {
-    var old = document.getElementById('markmap-wrapper');
-    if (old) old.remove();
-    // Garante que o article voltou a aparecer antes de reprocessar
-    var art = document.querySelector('article');
-    if (art) art.style.display = '';
-    setTimeout(renderMarkmap, 50);
-  });
+  // Quartz dispara 'nav' tanto no carregamento inicial quanto nas navegacoes SPA.
+  // Este e o unico listener necessario.
+  document.addEventListener('nav', onNav);
 })();
