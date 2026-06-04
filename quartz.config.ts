@@ -3,28 +3,25 @@ import * as Plugin from "./quartz/plugins"
 
 /**
  * Quartz 4 Configuration
- *
- * See https://quartz.jzhao.xyz/configuration for more information.
+ * Customizado para o Concurso TJCE 2026
  */
 const config: QuartzConfig = {
   configuration: {
-    pageTitle: "Quartz 4",
-    pageTitleSuffix: "",
+    pageTitle: "Concurso TJCE 2026",
+    pageTitleSuffix: " | TJCE",
     enableSPA: true,
     enablePopovers: true,
-    analytics: {
-      provider: "plausible",
-    },
-    locale: "en-US",
-    baseUrl: "quartz.jzhao.xyz",
+    analytics: null,
+    locale: "pt-BR",
+    baseUrl: "gilsonnogueira.github.io/Concurso-TJCE-2026",
     ignorePatterns: ["private", "templates", ".obsidian"],
     defaultDateType: "modified",
     theme: {
       fontOrigin: "googleFonts",
       cdnCaching: true,
       typography: {
-        header: "Schibsted Grotesk",
-        body: "Source Sans Pro",
+        header: "Inter",
+        body: "Inter",
         code: "IBM Plex Mono",
       },
       colors: {
@@ -52,6 +49,24 @@ const config: QuartzConfig = {
         },
       },
     },
+    additionalHead: [
+      // Injeta Markmap para notas com frontmatter "markmap:"
+      (fileData) => {
+        const hasMarkmap = fileData.frontmatter?.markmap !== undefined
+        if (!hasMarkmap) return null
+        return (
+          <>
+            <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js" defer={false}></script>
+            <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.17/dist/browser/index.js" defer={false}></script>
+            <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.17/dist/browser/index.js" defer={false}></script>
+            <script src="https://cdn.jsdelivr.net/npm/markmap-common@0.17/dist/browser/index.js" defer={false}></script>
+            <script dangerouslySetInnerHTML={{ __html: `
+              window.__MARKMAP_CONFIG__ = ${JSON.stringify(fileData.frontmatter?.markmap ?? {})};
+            `}}></script>
+          </>
+        )
+      }
+    ],
   },
   plugins: {
     transformers: [
@@ -88,7 +103,6 @@ const config: QuartzConfig = {
       Plugin.Static(),
       Plugin.Favicon(),
       Plugin.NotFoundPage(),
-      // Comment out CustomOgImages to speed up build time
       Plugin.CustomOgImages(),
     ],
   },
