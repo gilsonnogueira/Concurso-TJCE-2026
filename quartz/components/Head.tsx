@@ -122,10 +122,9 @@ export default (() => {
         .center.center { max-width: 90vw !important; width: 100% !important; margin: 0 auto; }
 
         /* Quando for mapa mental, oculta sidebar esquerda e expande */
-        body.is-markmap { overflow: hidden; }
         body.is-markmap .left.sidebar { display: none !important; }
         body.is-markmap .center.center { max-width: 100vw !important; width: 100vw !important; margin: 0 !important; padding: 0 !important; }
-        body.is-markmap article { padding: 0 !important; overflow: hidden; }
+        body.is-markmap article { padding: 0 !important; }
         body.is-markmap .page-header { padding: 0.5rem 1rem !important; }
 
         /* SVG ocupa toda a area restante apos o cabecalho */
@@ -133,7 +132,6 @@ export default (() => {
           display: block;
           width: 100% !important;
           cursor: grab;
-          touch-action: none;
         }
         body.is-markmap .markmap-svg:active { cursor: grabbing; }
 
@@ -320,6 +318,10 @@ export default (() => {
           svg.className = "markmap-svg";
           
           container.insertBefore(svg, container.firstChild);
+
+          // Impede scroll da pagina quando o mouse esta sobre o mapa
+          svg.addEventListener('wheel', (e) => { e.preventDefault(); }, { passive: false });
+          svg.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
           
           // Oculta todo conteudo original - o H1 virou o no raiz do mapa
           Array.from(container.children).forEach(child => {
@@ -365,30 +367,35 @@ export default (() => {
           controls.className = 'markmap-controls';
 
           const foldAll = (node, fold) => {
-            if (node.children && node.children.length > 0) {
-              if (node.depth > 0) node.payload = { ...node.payload, fold: fold };
-              node.children.forEach(c => foldAll(c, fold));
+            // Nao dobra o no raiz (depth 0)
+            if (node.depth > 0) {
+              node.payload = { ...node.payload, fold: fold };
             }
+            node.children?.forEach(c => foldAll(c, fold));
           };
 
-          // Botão: Expandir tudo
+          // Botao: Expandir tudo  (<> = abre, expande)
           const btnExpand = document.createElement('button');
           btnExpand.title = 'Expandir tudo';
-          btnExpand.innerHTML = '⊞';
+          btnExpand.innerHTML = '&lt;&gt;';
+          btnExpand.style.fontSize = '13px';
+          btnExpand.style.fontWeight = 'bold';
           btnExpand.onclick = () => {
             foldAll(rootNode, 0);
             mm.setData(rootNode);
-            mm.fit();
+            setTimeout(() => mm.fit(), 50);
           };
 
-          // Botão: Recolher tudo
+          // Botao: Recolher tudo  (>< = fecha, comprime)
           const btnCollapse = document.createElement('button');
           btnCollapse.title = 'Recolher tudo';
-          btnCollapse.innerHTML = '⊟';
+          btnCollapse.innerHTML = '&gt;&lt;';
+          btnCollapse.style.fontSize = '13px';
+          btnCollapse.style.fontWeight = 'bold';
           btnCollapse.onclick = () => {
             foldAll(rootNode, 1);
             mm.setData(rootNode);
-            mm.fit();
+            setTimeout(() => mm.fit(), 50);
           };
 
           // Botão: Resetar / Ajustar à tela
