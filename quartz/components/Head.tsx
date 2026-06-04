@@ -97,16 +97,7 @@ export default (() => {
             return resource
           }
         })}
-        {fileData.frontmatter?.markmap !== undefined && (
-          <>
-            <div
-              id="markmap-trigger"
-              data-config={JSON.stringify(fileData.frontmatter.markmap)}
-              style="display:none"
-            ></div>
-            <script src={joinSegments(baseDir, "static/markmap-render.js")} defer={true}></script>
-          </>
-        )}
+        <script src={joinSegments(baseDir, "static/markmap-render.js")} defer={true}></script>
       </head>
     )
   }
