@@ -123,8 +123,43 @@ export default (() => {
 
         /* Quando for mapa mental, oculta sidebar esquerda e expande */
         body.is-markmap .left.sidebar { display: none !important; }
-        body.is-markmap .center.center { max-width: 100vw !important; width: 100vw !important; margin: 0 !important; padding: 0 0 0 1rem !important; }
-        body.is-markmap .markmap-svg { height: calc(100vh - 120px) !important; min-height: 500px; }
+        body.is-markmap .center.center { max-width: 100vw !important; width: 100vw !important; margin: 0 !important; padding: 0 !important; }
+        body.is-markmap .markmap-svg { height: calc(100vh - 140px) !important; min-height: 500px; display: block; }
+        body.is-markmap article { padding: 0 !important; }
+        body.is-markmap .page-header { padding: 0.5rem 1rem !important; }
+        
+        /* Botões flutuantes de controle do mapa mental */
+        .markmap-controls {
+          position: fixed;
+          bottom: 24px;
+          right: 24px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          z-index: 9999;
+        }
+        .markmap-controls button {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          border: 1px solid rgba(255,255,255,0.2);
+          background: rgba(30,30,40,0.85);
+          color: #e2e8f0;
+          font-size: 18px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+          transition: background 0.2s;
+          backdrop-filter: blur(6px);
+        }
+        .markmap-controls button:hover { background: rgba(60,60,80,0.95); }
+        .theme-light .markmap-controls button {
+          background: rgba(240,240,245,0.9);
+          color: #1a1a2e;
+          border: 1px solid rgba(0,0,0,0.15);
+        }
         ` }} />
 
         <script dangerouslySetInnerHTML={{ __html: `
@@ -276,17 +311,85 @@ export default (() => {
           });
         
           const { Markmap } = window.markmap;
+          let mm;
           try {
-            Markmap.create(svg, {
+            mm = Markmap.create(svg, {
+              maxWidth: 280,          // Força quebra de linha nos nós
+              spacingVertical: 8,
+              spacingHorizontal: 60,
+              autoFit: true,
+              initialExpandLevel: 2,
               color: (node) => {
                   const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
                   return colors[node.depth % colors.length];
               },
-              autoFit: true
             }, rootNode);
           } catch(e) {
             console.error("Markmap create error:", e);
+            return;
           }
+
+          // Remove controles antigos se houver (navegação SPA)
+          document.querySelector('.markmap-controls')?.remove();
+
+          // Cria botões de controle flutuantes
+          const controls = document.createElement('div');
+          controls.className = 'markmap-controls';
+
+          const foldAll = (node, fold) => {
+            if (node.children && node.children.length > 0) {
+              if (node.depth > 0) node.payload = { ...node.payload, fold: fold };
+              node.children.forEach(c => foldAll(c, fold));
+            }
+          };
+
+          // Botão: Expandir tudo
+          const btnExpand = document.createElement('button');
+          btnExpand.title = 'Expandir tudo';
+          btnExpand.innerHTML = '⊞';
+          btnExpand.onclick = () => {
+            foldAll(rootNode, 0);
+            mm.setData(rootNode);
+            mm.fit();
+          };
+
+          // Botão: Recolher tudo
+          const btnCollapse = document.createElement('button');
+          btnCollapse.title = 'Recolher tudo';
+          btnCollapse.innerHTML = '⊟';
+          btnCollapse.onclick = () => {
+            foldAll(rootNode, 1);
+            mm.setData(rootNode);
+            mm.fit();
+          };
+
+          // Botão: Resetar / Ajustar à tela
+          const btnFit = document.createElement('button');
+          btnFit.title = 'Ajustar à tela';
+          btnFit.innerHTML = '⊡';
+          btnFit.onclick = () => mm.fit();
+
+          // Botão: Zoom +
+          const btnZoomIn = document.createElement('button');
+          btnZoomIn.title = 'Zoom +';
+          btnZoomIn.innerHTML = '+';
+          btnZoomIn.style.fontWeight = 'bold';
+          btnZoomIn.onclick = () => mm.rescale(1.3);
+
+          // Botão: Zoom -
+          const btnZoomOut = document.createElement('button');
+          btnZoomOut.title = 'Zoom -';
+          btnZoomOut.innerHTML = '−';
+          btnZoomOut.style.fontWeight = 'bold';
+          btnZoomOut.onclick = () => mm.rescale(0.77);
+
+          controls.append(btnExpand, btnCollapse, btnFit, btnZoomIn, btnZoomOut);
+          document.body.appendChild(controls);
+
+          // Remove controles ao sair da pagina de mapa mental
+          document.addEventListener('nav', () => {
+            controls.remove();
+          }, { once: true });
         });
         ` }} />
       </head>
