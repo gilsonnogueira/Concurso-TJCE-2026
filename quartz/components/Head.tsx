@@ -395,16 +395,18 @@ export default (() => {
           // ================================================================
           let _isPanMode = true;
 
+          // Aplica modo inicial direto via CSS (antes de criar os botoes)
+          document.body.classList.add('is-markmap-pan');
+          document.body.classList.remove('is-markmap-select');
+
           const setMode = (pan) => {
             _isPanMode = pan;
             document.body.classList.toggle('is-markmap-pan', pan);
             document.body.classList.toggle('is-markmap-select', !pan);
-            btnMode.classList.toggle('mode-active', pan);
-            btnSelect.classList.toggle('mode-active', !pan);
+            // btnMode e btnSelect ja existem quando setMode e chamado pelos usuarios
+            if (btnMode) btnMode.classList.toggle('mode-active', pan);
+            if (btnSelect) btnSelect.classList.toggle('mode-active', !pan);
           };
-
-          // Inicia em modo Pan
-          setMode(true);
 
           // Remove controles antigos se houver (navegacao SPA)
           document.querySelector('.markmap-controls')?.remove();
@@ -428,12 +430,13 @@ export default (() => {
           btnMode.title = 'Modo Pan - mover mapa (atalho: P)';
           btnMode.innerHTML = '&#x270B;'; // ✋
           btnMode.style.fontSize = '20px';
+          btnMode.classList.add('mode-active'); // pan e o modo inicial
           btnMode.onclick = () => setMode(true);
 
           // --- BOTAO: Modo Selecionar (seta) ---
           const btnSelect = document.createElement('button');
           btnSelect.title = 'Modo Selecionar - clicar links e ramos (atalho: S)';
-          btnSelect.innerHTML = '&#x2197;'; // ↗ seta
+          btnSelect.innerHTML = '&#x2197;'; // ↗
           btnSelect.style.fontSize = '18px';
           btnSelect.onclick = () => setMode(false);
 
