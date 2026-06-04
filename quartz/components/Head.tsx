@@ -87,6 +87,9 @@ export default (() => {
         <meta name="generator" content="Quartz" />
 
         {css.map((resource) => CSSResourceToStyleElement(resource, true))}
+        {fileData.frontmatter?.markmap !== undefined && (
+          <script src={joinSegments(baseDir, "static/markmap-render.js")} defer={true}></script>
+        )}
         {js
           .filter((resource) => resource.loadTime === "beforeDOMReady")
           .map((res) => JSResourceToScriptElement(res, true))}
