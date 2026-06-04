@@ -138,7 +138,9 @@ export default (() => {
         body.is-markmap .markmap-svg:active { cursor: grabbing; }
 
         /* Garante que os nos (foreignObject) nao bloqueiem as bolinhas de collapse */
+        /* mas mantem links clicaveis dentro dos nos */
         .markmap-node foreignObject { pointer-events: none; }
+        .markmap-node foreignObject a { pointer-events: all; cursor: pointer; }
         .markmap-node circle { pointer-events: all; cursor: pointer; }
 
         /* Botoes flutuantes de controle do mapa mental */
