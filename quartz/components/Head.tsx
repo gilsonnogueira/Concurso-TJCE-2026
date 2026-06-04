@@ -122,13 +122,26 @@ export default (() => {
         .center.center { max-width: 90vw !important; width: 100% !important; margin: 0 auto; }
 
         /* Quando for mapa mental, oculta sidebar esquerda e expande */
+        body.is-markmap { overflow: hidden; }
         body.is-markmap .left.sidebar { display: none !important; }
         body.is-markmap .center.center { max-width: 100vw !important; width: 100vw !important; margin: 0 !important; padding: 0 !important; }
-        body.is-markmap .markmap-svg { height: calc(100vh - 140px) !important; min-height: 500px; display: block; }
-        body.is-markmap article { padding: 0 !important; }
+        body.is-markmap article { padding: 0 !important; overflow: hidden; }
         body.is-markmap .page-header { padding: 0.5rem 1rem !important; }
-        
-        /* Botões flutuantes de controle do mapa mental */
+
+        /* SVG ocupa toda a area restante apos o cabecalho */
+        body.is-markmap .markmap-svg {
+          display: block;
+          width: 100% !important;
+          cursor: grab;
+          touch-action: none;
+        }
+        body.is-markmap .markmap-svg:active { cursor: grabbing; }
+
+        /* Garante que os nos (foreignObject) nao bloqueiem as bolinhas de collapse */
+        .markmap-node foreignObject { pointer-events: none; }
+        .markmap-node circle { pointer-events: all; cursor: pointer; }
+
+        /* Botoes flutuantes de controle do mapa mental */
         .markmap-controls {
           position: fixed;
           bottom: 24px;
@@ -291,14 +304,17 @@ export default (() => {
           
           if (rootNode.children.length === 0) return;
         
-          // Ensure we don't duplicate SVG on multiple navigations
+          // Calcula altura disponivel para o SVG (tela - cabecalho)
+          const headerEl = document.querySelector('.page-header') || document.querySelector('header');
+          const headerH = headerEl ? headerEl.getBoundingClientRect().bottom : 80;
+          const svgH = Math.max(window.innerHeight - headerH - 8, 400);
+
           const oldSvg = container.querySelector('.markmap-svg');
           if (oldSvg) oldSvg.remove();
-        
+
           const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
           svg.style.width = "100%";
-          svg.style.height = "80vh";
-          svg.style.minHeight = "600px";
+          svg.style.height = svgH + "px";
           svg.className = "markmap-svg";
           
           container.insertBefore(svg, container.firstChild);
@@ -310,18 +326,28 @@ export default (() => {
             }
           });
         
+          const branchColors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#bcbd22', '#17becf', '#e6550d'];
+
+          // Atribui indice de ramo a todos os nos (mesma cor para todo o ramo)
+          const assignBranch = (node, branchIdx) => {
+            node._branchIdx = branchIdx;
+            node.children?.forEach(child => assignBranch(child, branchIdx));
+          };
+          rootNode._branchIdx = -1;
+          rootNode.children?.forEach((child, i) => assignBranch(child, i));
+
           const { Markmap } = window.markmap;
           let mm;
           try {
             mm = Markmap.create(svg, {
-              maxWidth: 280,          // Força quebra de linha nos nós
+              maxWidth: 280,
               spacingVertical: 8,
               spacingHorizontal: 60,
               autoFit: true,
               initialExpandLevel: 2,
               color: (node) => {
-                  const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
-                  return colors[node.depth % colors.length];
+                if (node._branchIdx === undefined || node._branchIdx < 0) return '#888888';
+                return branchColors[node._branchIdx % branchColors.length];
               },
             }, rootNode);
           } catch(e) {
