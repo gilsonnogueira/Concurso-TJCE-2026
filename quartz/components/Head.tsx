@@ -134,24 +134,37 @@ export default (() => {
         
           const titleStr = \`${title}\`.replace(/"/g, '&quot;');
         
-          if (!window.markmapLoaded) {
-            const d3Script = document.createElement('script');
-            d3Script.src = "https://cdn.jsdelivr.net/npm/d3@7";
-            document.head.appendChild(d3Script);
-            
-            const mmScript = document.createElement('script');
-            mmScript.src = "https://cdn.jsdelivr.net/npm/markmap-view@0.17.0/dist/browser/index.js";
-            document.head.appendChild(mmScript);
-            
-            // Wait for markmap to be available
-            for(let i=0; i<50; i++) {
-              if (window.markmap) break;
-              await new Promise(r => setTimeout(r, 100));
+          const loadScript = (src) => new Promise((resolve, reject) => {
+            if (document.querySelector(\`script[src="\${src}"]\`)) { resolve(); return; }
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+          });
+        
+          if (!window.markmapLoadingStarted) {
+            window.markmapLoadingStarted = true;
+            try {
+              await loadScript("https://cdn.jsdelivr.net/npm/d3@7");
+              await loadScript("https://cdn.jsdelivr.net/npm/markmap-view@0.17.0/dist/browser/index.js");
+              window.markmapLoaded = true;
+            } catch (err) {
+              console.error("Failed to load markmap scripts", err);
+              return;
             }
-            window.markmapLoaded = true;
+          } else {
+            // Wait if it's already loading from a previous navigation
+            for(let i=0; i<100; i++) {
+              if (window.markmapLoaded) break;
+              await new Promise(r => setTimeout(r, 50));
+            }
           }
           
-          if (!window.markmap) return;
+          if (!window.markmap || !window.markmap.Markmap) {
+             console.error("Markmap is not fully initialized!");
+             return;
+          }
           
           const parseDOMToINode = (containerEl, rootTitle) => {
             const rootNode = { type: 'heading', depth: 0, payload: { lines: [0, 1] }, content: rootTitle, children: [] };
@@ -163,19 +176,12 @@ export default (() => {
               const nodes = [];
               Array.from(ul.children).forEach(li => {
                 if (li.tagName === "LI") {
-                  let html = "";
-                  for (let child of li.childNodes) {
-                    if (child.tagName === "UL" || child.tagName === "OL") break;
-                    if (child.nodeType === Node.ELEMENT_NODE) html += child.outerHTML;
-                    else if (child.nodeType === Node.TEXT_NODE) html += child.textContent;
-                  }
-                  
-                  // Clean up anchor links or fold comments if present
                   const temp = document.createElement('div');
-                  temp.innerHTML = html.trim();
+                  temp.innerHTML = li.innerHTML;
+                  temp.querySelectorAll(':scope > ul, :scope > ol').forEach(e => e.remove());
                   temp.querySelectorAll('a.internal-link[role="anchor"]').forEach(a => a.remove());
-                  html = temp.innerHTML.trim();
                   
+                  const html = temp.innerHTML.trim();
                   const node = { type: 'heading', depth: depth, payload: { lines: [0, 1] }, content: html, children: [] };
                   const childUl = Array.from(li.children).find(c => c.tagName === "UL" || c.tagName === "OL");
                   if (childUl) {
@@ -225,7 +231,11 @@ export default (() => {
         
           const rootNode = parseDOMToINode(container, titleStr);
           
-          if (rootNode.children.length === 0) return; // Se nao achou nada, sai sem renderizar
+          if (rootNode.children.length === 0) return;
+        
+          // Ensure we don't duplicate SVG on multiple navigations
+          const oldSvg = container.querySelector('.markmap-svg');
+          if (oldSvg) oldSvg.remove();
         
           const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
           svg.style.width = "100%";
@@ -235,7 +245,6 @@ export default (() => {
           
           container.insertBefore(svg, container.firstChild);
           
-          // Ocultar conteudo original markdown, exceto SVG, H1, div de metadata
           Array.from(container.children).forEach(child => {
             if (child !== svg && child.tagName !== 'H1' && !child.classList.contains('content-meta')) {
               child.style.display = 'none';
@@ -243,13 +252,17 @@ export default (() => {
           });
         
           const { Markmap } = window.markmap;
-          Markmap.create(svg, {
-            color: (node) => {
-                const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
-                return colors[node.depth % colors.length];
-            },
-            autoFit: true
-          }, rootNode);
+          try {
+            Markmap.create(svg, {
+              color: (node) => {
+                  const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
+                  return colors[node.depth % colors.length];
+              },
+              autoFit: true
+            }, rootNode);
+          } catch(e) {
+            console.error("Markmap create error:", e);
+          }
         });
         ` }} />
       </head>
